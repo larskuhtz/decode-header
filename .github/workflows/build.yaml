@@ -1,0 +1,43 @@
+name: docker-image
+
+on:
+  push:
+    branches:
+      - "main"
+env:
+  TEST_TAG: larskuhtz/decode-header:test
+  LATEST_TAG: ghcr.io/larskuhtz/decode-header:latest
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and export to Docker
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          load: true
+          tags: ${{ env.TEST_TAG }}
+      - name: Test
+        run: |
+          echo 'AAAAAAAAAABSKOcVMfkFAFefoe2pgVG9q-eTey6PEHLlezeirFmHK3QDj2FioNbmAwAFAAAAWJKU_fJrYgmO7fVgATHmXTxQDUarg2CL08f5hU2bnFMKAAAAp5roGj7OuCAPcVD35AIR95MzMnCJExv0RCIYBh7baEQPAAAAtvOkNMYWXzsWm_lYvKB4aeSbFvrWS5CmVAW1VDfnDZrHzginhWV8g1lwq5OE5zZwz0AfX-uMJOIXAAAAAAAAAI2lFY9TeYh63bAPbrsWofYol9rGTLaR6div52_2ciWyAAAAAPbE5Tbfg-rW01EAAAAAAAAAAAAAAAAAAAAAAAAAAAAADWg3AAAAAAAFAAAA1Xt-0TD5BQBigXiJE4L4lKY93PK_Tg48Yf2eIUfgYWKSypRuhL7zfzm6FN27499o' | 
+          docker run -i --rm ${{ env.TEST_TAG }}
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.LATEST_TAG }}
