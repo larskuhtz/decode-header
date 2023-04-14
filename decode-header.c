@@ -720,11 +720,36 @@ int test_main ()
  * - support more work header encodings
  */
 
-int main( void )
+void info(FILE* f)
 {
-    size_t len = sizeof(HeaderBytes) * 2 + 2;
-    char *line = (char *) malloc(len);
+    fprintf(f, "decode-header - a tool for printing Kadena chainweb headers in JSON format\n");
+}
+
+void usage(FILE* f)
+{
+    fprintf(f, "USAGE:\n");
+    fprintf(f, "\n");
+    fprintf(f, "Options\n");
+    fprintf(f, "  --help, -?\n");
+    fprintf(f, "  --version, -v\n");
+    fprintf(f, "\n");
+    fprintf(f, "Stdin: newline separated lines of size of either\n");
+    fprintf(f, "  - %lu (binary)\n", sizeof(HeaderBytes));
+    fprintf(f, "  - %lu (hex)\n", sizeof(HeaderBytes) * 2);
+    fprintf(f, "  - %lu (hex with 0x prefix)\n", sizeof(HeaderBytes) * 2 + 2);
+    fprintf(f, "  - %lu (quoted hex)\n", sizeof(HeaderBytes) * 2 + 2);
+    fprintf(f, "  - %lu (quoted hex with 0x prefix)\n", sizeof(HeaderBytes) * 2 + 4);
+    fprintf(f, "  - 424 (base64)\n");
+    fprintf(f, "  - 426 (quoted base64)\n");
+}
+
+int main(int argc, char **argv)
+{
+    size_t len = (sizeof(HeaderBytes) * 2 + 2) * sizeof(char);
+    char *buffer = (char *) malloc(len);
+    char *line;
     ssize_t n;
+    int i;
 
     struct header header;
     struct work_header work_header;
@@ -732,49 +757,77 @@ int main( void )
     HeaderBytes b;
     HeaderBytes* bin = &b;
 
-    while ((n = getline(&line, &len, stdin)) >= 0) {
+    for (i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "-?") == 0 || strcmp(argv[i], "--help") == 0) {
+            info(stdout);
+            fprintf(stdout, "\n");
+            usage(stdout);
+            exit(0);
+        } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
+            info(stdout);
+            exit(0);
+        } else {
+            fprintf(stderr, "unrecognized command line option: %s\n", argv[i]);
+            exit(1);
+        }
+    }
+
+    while ((n = getline(&buffer, &len, stdin)) >= 0) {
+
+        line = buffer;
+
+        // strip pending newline (if any)
+        if (line[n-1] == '\n') {
+            n = n - 1;
+        }
+
+        // strip quotes (if any)
+        if (line[0] == '"' && line[n-1] == '"') {
+            line = line + 1;
+            n = n - 2;
+        }
 
         // base64 encoded input
-        if (n-1 == 424) {
-            decode_base64Url(bin->header_bytes, line, n-1);
+        if (n == 424) {
+            decode_base64Url(bin->header_bytes, line, n);
             read_header(bin, &header);
 
         // hex input with prefix
-        } else if (n-1 == 2 + sizeof(HeaderBytes) * 2) {
-            decode_hex(bin->header_bytes, line + 2, n-3);
+        } else if (n == 2 + sizeof(HeaderBytes) * 2) {
+            decode_hex(bin->header_bytes, line + 2, n-2);
             read_header((HeaderBytes *)bin, &header);
 
         // hex input
-        } else if (n-1 == sizeof(HeaderBytes) * 2) {
-            decode_hex(bin->header_bytes, line, n-1);
+        } else if (n == sizeof(HeaderBytes) * 2) {
+            decode_hex(bin->header_bytes, line, n);
             read_header((HeaderBytes *)bin, &header);
 
         // hex work header (sent to miner)
-        } else if (n-1 == sizeof(WorkHeaderBytes) * 2) {
-            decode_hex(bin->header_bytes, line, n-1);
+        } else if (n == sizeof(WorkHeaderBytes) * 2) {
+            decode_hex(bin->header_bytes, line, n);
             read_work_header((WorkHeaderBytes *)bin, &work_header);
             json_work_header_b64_(&work_header);
             fputc('\n', stdout);
             continue;
 
         // binary input
-        } else if (n-1 == sizeof(HeaderBytes)) {
+        } else if (n == sizeof(HeaderBytes)) {
             read_header((HeaderBytes *)line, &header);
 
         // error
         } else {
-            fprintf(stderr, "header has wrong length: %lu, expected %lu (or %lu, or 424)\n", n-1, sizeof(HeaderBytes), sizeof(HeaderBytes) * 2);
-            fprintf(stderr, "line: %s\n", line);
+            fprintf(stderr, "header has wrong length: %lu\n", n);
+            fprintf(stderr, "line: %s\n\n", line);
+            usage(stderr);
             exit(1);
         }
 
         json_header_b64_(&header);
         fputc('\n', stdout);
-        // printf("\n");
     }
 
 finally:
-    free(line);
+    free(buffer);
     // free(bin);
     return 0;
 }
