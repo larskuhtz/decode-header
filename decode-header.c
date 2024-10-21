@@ -217,6 +217,7 @@ enum chainweb_version {
     development = 1,
     mainnet01 = 5,
     testnet04 = 7,
+    testnet05 = 9,
     unknown
 };
 
@@ -331,14 +332,18 @@ static int read_height(const HeaderBytes *hdr)
 
 static enum chainweb_version read_version(const HeaderBytes *hdr)
 {
-    switch (le32toh(*(uint32_t *)(hdr->header_bytes + VERSION_OFFSET))) {
+    uint32_t code = le32toh(*(uint32_t *)(hdr->header_bytes + VERSION_OFFSET));
+    switch (code) {
     case 0x00000001:
         return development;
     case 0x00000005:
         return mainnet01;
     case 0x00000007:
         return testnet04;
+    case 0x00000009:
+        return testnet05;
     default:
+        fprintf(stderr, "warning: unknown chainweb version code %d\n", code);
         return unknown;
     }
 }
@@ -457,6 +462,8 @@ int json_version(char *buf, const enum chainweb_version ver) {
         return sprintf(buf, "\"mainnet01\"");
     case testnet04:
         return sprintf(buf, "\"testnet04\"");
+    case testnet05:
+        return sprintf(buf, "\"testnet05\"");
     default:
         return sprintf(buf, "\"unknown\"");
     }
