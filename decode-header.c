@@ -702,7 +702,7 @@ int json_work_header_b64_ (const struct work_header* header)
 /* ************************************************************************** */
 /* Tests */
 
-int test_main ()
+int test_main (void)
 {
     struct header header;
     HeaderBytes *bin = (HeaderBytes *) malloc(sizeof(HeaderBytes));
@@ -760,7 +760,6 @@ int main(int argc, char **argv)
 
     struct header header;
     struct work_header work_header;
-    // HeaderBytes *bin = (HeaderBytes *) malloc(sizeof(HeaderBytes));
     HeaderBytes b;
     HeaderBytes* bin = &b;
 
@@ -781,61 +780,72 @@ int main(int argc, char **argv)
 
     while ((n = getline(&buffer, &len, stdin)) >= 0) {
 
-        line = buffer;
+        // binary input mode
+        if (n <= (ssize_t) sizeof(HeaderBytes)) {
+            if (n < (ssize_t) sizeof(HeaderBytes)) {
+                n += fread(&buffer[n], 1, sizeof(HeaderBytes) - n, stdin);
+                if (n < (ssize_t) sizeof(HeaderBytes)) {
+                    fprintf(stderr, "binary header has wrong length: %lu\n", n);
+                    fprintf(stderr, "line: %s\n\n", buffer);
+                    usage(stderr);
+                    exit(1);
+                }
+            }
+            read_header((HeaderBytes *)buffer, &header);
 
-        // strip pending newline (if any)
-        if (line[n-1] == '\n') {
-            n = n - 1;
-        }
-
-        // strip quotes (if any)
-        if (line[0] == '"' && line[n-1] == '"') {
-            line = line + 1;
-            n = n - 2;
-        }
-
-        // base64 encoded input
-        if (n == 424) {
-            decode_base64Url(bin->header_bytes, line, n);
-            read_header(bin, &header);
-
-        // hex input with prefix
-        } else if (n == 2 + sizeof(HeaderBytes) * 2) {
-            decode_hex(bin->header_bytes, line + 2, n-2);
-            read_header((HeaderBytes *)bin, &header);
-
-        // hex input
-        } else if (n == sizeof(HeaderBytes) * 2) {
-            decode_hex(bin->header_bytes, line, n);
-            read_header((HeaderBytes *)bin, &header);
-
-        // hex work header (sent to miner)
-        } else if (n == sizeof(WorkHeaderBytes) * 2) {
-            decode_hex(bin->header_bytes, line, n);
-            read_work_header((WorkHeaderBytes *)bin, &work_header);
-            json_work_header_b64_(&work_header);
-            fputc('\n', stdout);
-            continue;
-
-        // binary input
-        } else if (n == sizeof(HeaderBytes)) {
-            read_header((HeaderBytes *)line, &header);
-
-        // error
+        // text input mode
         } else {
-            fprintf(stderr, "header has wrong length: %lu\n", n);
-            fprintf(stderr, "line: %s\n\n", line);
-            usage(stderr);
-            exit(1);
+
+            line = buffer;
+
+            // strip pending newline (if any)
+            if (line[n-1] == '\n') {
+            n = n - 1;
+            }
+
+            // strip quotes (if any)
+            if (line[0] == '"' && line[n-1] == '"') {
+                line = line + 1;
+                n = n - 2;
+            }
+
+            // base64 encoded input
+            if (n == 424) {
+                decode_base64Url(bin->header_bytes, line, n);
+                read_header(bin, &header);
+
+            // hex input with prefix
+            } else if (n == 2 + sizeof(HeaderBytes) * 2) {
+                decode_hex(bin->header_bytes, line + 2, n-2);
+                read_header((HeaderBytes *)bin, &header);
+
+            // hex input
+            } else if (n == sizeof(HeaderBytes) * 2) {
+                decode_hex(bin->header_bytes, line, n);
+                read_header((HeaderBytes *)bin, &header);
+
+            // hex work header (sent to miner)
+            } else if (n == sizeof(WorkHeaderBytes) * 2) {
+                decode_hex(bin->header_bytes, line, n);
+                read_work_header((WorkHeaderBytes *)bin, &work_header);
+                json_work_header_b64_(&work_header);
+                fputc('\n', stdout);
+                continue;
+
+            // error
+            } else {
+                fprintf(stderr, "header has wrong length: %lu\n", n);
+                fprintf(stderr, "line: %s\n\n", line);
+                usage(stderr);
+                exit(1);
+            }
         }
 
         json_header_b64_(&header);
         fputc('\n', stdout);
     }
 
-finally:
     free(buffer);
-    // free(bin);
     return 0;
 }
 
